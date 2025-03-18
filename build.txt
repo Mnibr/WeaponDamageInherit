@@ -1,0 +1,3 @@
+displayName = 武器面板继承·WeaponDamageInherit
+author = 错数螺线LogSpiral
+version = 0.1.7
