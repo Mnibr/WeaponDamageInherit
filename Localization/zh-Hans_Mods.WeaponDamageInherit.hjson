@@ -1,0 +1,96 @@
+Items: {
+	InheritAnvil: {
+		DisplayName: 非常闪的”微光转换砧“
+		Tooltip:
+			'''
+			微光的洗礼让铁砧获得了神奇的力量
+			将更强大的武器之力注入你的本命武器之中吧！
+			“看上去闪闪发亮！”
+			'''
+	}
+}
+
+Configs: {
+	WDIConfig: {
+		DisplayName: 武器继承设置
+
+		inheritMode: {
+			Label: 继承限制模式
+			Tooltip: 全部就是什么都能互相嵌入，相等就是要严格类型一致，注意原版有两种近战两种召唤(
+		}
+
+		DismodifyWhenUnqualified: {
+			Label: 是否在不满足继承限制的时候对已嵌合的武器修改面板
+			Tooltip: 如果开启了并且不满足嵌合条件，会采用原面板
+		}
+
+		useRangeInfuence: {
+			Label: 是否让攻击范围参与面板决定因素
+			Tooltip: 系数为嵌入武器大小除以本体武器大小
+		}
+
+		justCopyValue: {
+		}
+
+		inheritCheck: {
+			Label: 继承限制模式
+			Tooltip:
+				'''
+				全部：只要是武器就行
+				关联：有共同的父类型，模组类型不受限制
+				半兼容： 模组攻击类型武器和原版攻击类型武器可以互相继承，但是原版类型之间必须严格相等，并且继承时能够发射弹幕的武器和不能发射弹幕的武器不能互相继承
+				兼容： 模组攻击类型武器和原版攻击类型武器可以互相继承，但是原版类型之间必须严格相等
+				相邻：必须得是同一个继承链上的
+				半相等：要求武器类型严格相等，但能够发射弹幕的武器和不能发射弹幕的武器不能互相继承
+				相等：严格相等
+				'''
+		}
+
+		inheritCoefficient: {
+			Label: 继承系数模式
+			Tooltip: ""
+		}
+
+		sizeInfluenceMeleeCheck: {
+			Label: 检测武器大小折算时是否检测近战类型
+			Tooltip: 用来兼容其它类型但是表现类似近战的
+		}
+
+		useDamageLimit: {
+			Label: 是否限制系数大小
+			Tooltip: ""
+		}
+
+		DamageMaxLimit: {
+			Label: 系数最高值
+			Tooltip: 需要开启上面的限制生效
+		}
+
+		DamageMinLimit: {
+			Label: 系数最低值
+			Tooltip: 需要开启上面的限制生效
+		}
+	}
+
+	InheritMode: {
+	}
+
+	InheritCheckMode: {
+		Tooltip: ""
+		All.Label: 全部
+		ExtendedFamily.Label: 关联
+		Compatible.Label: 兼容
+		CoreFamily.Label: 相邻
+		Equal.Label: 相等
+		EqualNoProj.Label: 半相等
+		CompatibleNoProj.Label: 半兼容
+	}
+
+	InheritCoefficientMode: {
+		Tooltip: ""
+		Copy.Label: 复制
+		Speed.Label: 攻速折算
+		Size.Label: 大小折算
+		Both.Label: 同时进行攻速和大小折算
+	}
+}

@@ -1,0 +1,96 @@
+Items: {
+	InheritAnvil: {
+		DisplayName: Sparkling Glimmer Anvil
+		Tooltip:
+			'''
+			Baptized by glimmer, this anvil has gained mystical power
+			Infuse mightier weapon energy into your soulbound armaments!
+			"Looks dazzlingly shiny!"
+			'''
+	}
+}
+
+Configs: {
+	WDIConfig: {
+		DisplayName: Weapon Inheritance Settings
+
+		inheritMode: {
+			Label: Inheritance Restriction Mode
+			Tooltip: All: Any weapon can inherit. Equal: Requires exact weapon type match (Note: Vanilla has two melee and two summon types)
+		}
+
+		DismodifyWhenUnqualified: {
+			Label: Adjust Stats When Requirements Not Met
+			Tooltip: If enabled, reverts modified stats when inheritance conditions aren't satisfied
+		}
+
+		useRangeInfuence: {
+			Label: Consider Attack Range in Stat Calculation
+			Tooltip: Uses ratio of embedded weapon size to base weapon size as multiplier
+		}
+
+		justCopyValue: {
+		}
+
+		inheritCheck: {
+			Label: Inheritance Restriction Mode
+			Tooltip:
+				'''
+				All: Any weapon type
+				ExtendedFamily: Shares parent type (mod types unrestricted)
+				Compatible: Mod attack types can inherit with vanilla, vanilla types require exact match
+				Semi-Compatible: Mod/vanilla types compatible, vanilla requires strict matching. Projectile/non-projectile weapons can't inherit
+				CoreFamily: Must be in same inheritance chain
+				Semi-Equal: Strict type match excluding projectile capability
+				Equal: Exact type match
+				'''
+		}
+
+		inheritCoefficient: {
+			Label: Inheritance Coefficient Mode
+			Tooltip: ""
+		}
+
+		sizeInfluenceMeleeCheck: {
+			Label: Apply Size Conversion to Melee Types
+			Tooltip: For compatibility with non-melee weapons that behave similarly
+		}
+
+		useDamageLimit: {
+			Label: Enable Coefficient Limits
+			Tooltip: ""
+		}
+
+		DamageMaxLimit: {
+			Label: Maximum Coefficient
+			Tooltip: Requires above option enabled
+		}
+
+		DamageMinLimit: {
+			Label: Minimum Coefficient
+			Tooltip: Requires above option enabled
+		}
+	}
+
+	InheritMode: {
+	}
+
+	InheritCheckMode: {
+		Tooltip: ""
+		All.Label: All
+		ExtendedFamily.Label: Extended Family
+		Compatible.Label: Compatible
+		CoreFamily.Label: Core Family
+		Equal.Label: Equal
+		EqualNoProj.Label: Semi-Equal
+		CompatibleNoProj.Label: Semi-Compatible
+	}
+
+	InheritCoefficientMode: {
+		Tooltip: ""
+		Copy.Label: Copy
+		Speed.Label: Attack Speed Conversion
+		Size.Label: Size Conversion
+		Both.Label: Both Conversions
+	}
+}
