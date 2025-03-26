@@ -22,6 +22,9 @@ using Terraria.GameContent.UI.Elements;
 using Terraria.ModLoader.IO;
 using System.IO;
 using Terraria.Localization;
+using MonoMod.Cil;
+using static System.Net.Mime.MediaTypeNames;
+using Terraria.DataStructures;
 
 namespace WeaponDamageInherit.Content
 {
@@ -34,12 +37,12 @@ namespace WeaponDamageInherit.Content
             return item.type == ItemID.LastPrism || item.DamageType == DamageClass.Summon;
         }
         public bool CheckUnavailable(Item item)
-        => targetItemClone == null 
-        || targetItemClone.useTime == 0 
-        || targetItemClone.damage == 0 
+        => targetItemClone == null
+        || targetItemClone.useTime == 0
+        || targetItemClone.damage == 0
         || ((item.shoot == ProjectileID.None ^ targetItemClone.shoot == ProjectileID.None) && (WDIConfig.Instance.inheritCheck == WDIConfig.InheritCheckMode.EqualNoProj || WDIConfig.Instance.inheritCheck == WDIConfig.InheritCheckMode.CompatibleNoProj))
-        || targetItemClone.consumable 
-        || targetItemClone.type == ItemID.None 
+        || targetItemClone.consumable
+        || targetItemClone.type == ItemID.None
         || targetItemClone.type == ModContent.ItemType<UnloadedItem>();
         public bool CheckDamageTypeInequal(DamageClass c1, DamageClass c2) => WDIConfig.Instance.DismodifyWhenUnqualified && !WeaponInheritUI.IsDamageTypeRelated(c1, c2);
         public override void ModifyWeaponDamage(Item item, Player player, ref StatModifier damage)
@@ -49,8 +52,7 @@ namespace WeaponDamageInherit.Content
             if (CheckDamageTypeInequal(item.DamageType, targetItemClone.DamageType))
                 return;
             var config = WDIConfig.Instance;
-            var i = targetItemClone.Clone();
-            i.Prefix(item.prefix);
+            var i = targetItemClone;
             float scaler = 1f;
             var mode = (byte)config.inheritCoefficient;
             if (mode % 2 == 1)
@@ -61,11 +63,13 @@ namespace WeaponDamageInherit.Content
                 scaler *= (i.scale * TextureAssets.Item[i.type].Size().Length()) / (item.scale * TextureAssets.Item[item.type].Size().Length());
             if (config.useDamageLimit)
                 scaler = MathHelper.Clamp(scaler, config.DamageMinLimit, config.DamageMaxLimit);
-            damage *= scaler * (float)i.damage / item.damage;
+            damage *= scaler * i.damage / item.OriginalDamage;
+            
             base.ModifyWeaponDamage(item, player, ref damage);
         }
         public override bool CanShoot(Item item, Player player)
         {
+            return true;
             if (CheckUnavailable(item) || !UseDefaultModify(item))
                 return true;
 
@@ -84,7 +88,7 @@ namespace WeaponDamageInherit.Content
             if (mode / 2 == 1 && (!config.sizeInfluenceMeleeCheck || ((item.DamageType.GetEffectInheritance(DamageClass.Melee) || item.DamageType == DamageClass.Melee) && (!item.noMelee || !item.noUseGraphic))))
                 scaler *= (i.scale * TextureAssets.Item[i.type].Size().Length()) / (item.scale * TextureAssets.Item[item.type].Size().Length());
             if (config.useDamageLimit)
-                scaler = MathHelper.Clamp(scaler, config.DamageMaxLimit, config.DamageMinLimit);
+                scaler = MathHelper.Clamp(scaler, config.DamageMinLimit, config.DamageMaxLimit);
             item.damage = (int)(targetItemClone.damage * scaler * i.damage / item.damage);
             i = item.Clone();
             i.Prefix(item.prefix);
@@ -186,10 +190,10 @@ namespace WeaponDamageInherit.Content
                 bool shootConflict = (item.shoot == ProjectileID.None) ^ (targetItemClone.shoot == ProjectileID.None);
                 if (shootConflict)
                 {
-                    string tooltipText = Language.ActiveCulture.Name == "zh-Hans" 
+                    string tooltipText = Language.ActiveCulture.Name == "zh-Hans"
                         ? $"嵌入的武器{targetItemClone.Name}[i:{targetItemClone.type}]因继承规则变动而嵌入失败，目前采用原始面板"
                         : $"Embed failed: {targetItemClone.Name}[i:{targetItemClone.type}] has conflicting damage type, using original stats.";
-                    
+
                     tooltips.Add(new TooltipLine(Mod, "UnloadedSourceItem", tooltipText));
                     return;
                 }
@@ -208,6 +212,18 @@ namespace WeaponDamageInherit.Content
             base.ModifyTooltips(item, tooltips);
         }
     }
+    public class WIGlobalProjForSummon : GlobalProjectile
+    {
+        public override bool InstancePerEntity => true;
+        public override void OnSpawn(Projectile projectile, IEntitySource source)
+        {
+            if (source is EntitySource_ItemUse_WithAmmo itemUse_WithAmmo)
+                sourceItemClone = itemUse_WithAmmo.Item;
+
+            base.OnSpawn(projectile, source);
+        }
+        public Item sourceItemClone;
+    }
     public class WeaponInheritSystem : ModSystem
     {
         public override void Load()
@@ -220,6 +236,28 @@ namespace WeaponDamageInherit.Content
                 weaponInheritUI.Activate();
                 userInterface.SetState(weaponInheritUI);
             }
+            IL_Projectile.Update += WeaponInheritModifyForSummon;
+        }
+
+        private void WeaponInheritModifyForSummon(MonoMod.Cil.ILContext il)
+        {
+            var ilCursor = new ILCursor(il);
+            if (!ilCursor.TryGotoNext(i => i.MatchLdfld(typeof(Projectile), "originalDamage")))
+                return;
+            for (int n = 0; n < 3; n++)
+                if (!ilCursor.TryGotoPrev(i => i.MatchLdarg0()))
+                    return;
+            ilCursor.RemoveRange(13);
+
+            ilCursor.EmitLdarg0();
+            ilCursor.EmitDelegate<Action<Projectile>>(proj =>
+            {
+                Player player = Main.player[proj.owner];
+                StatModifier modifier = player.GetTotalDamage(proj.DamageType);
+                if (proj.TryGetGlobalProjectile<WIGlobalProjForSummon>(out var globalProj) && globalProj.sourceItemClone != null)
+                    CombinedHooks.ModifyWeaponDamage(player, globalProj.sourceItemClone, ref modifier);
+                proj.damage = (int)modifier.ApplyTo(proj.originalDamage);
+            });
         }
 
         public static WeaponInheritSystem instance;
@@ -777,13 +815,13 @@ namespace WeaponDamageInherit.Content
             panel.Width.Set(280, 0f);
             panel.Height.Set(100, 0);
             Append(panel);
-            slotDestination = new ModItemSlot(0.85f, "WeaponDamageInherit/Content/Infinite_Icons_Weapon", () => 
+            slotDestination = new ModItemSlot(0.85f, "WeaponDamageInherit/Content/Infinite_Icons_Weapon", () =>
                 Language.ActiveCulture.Name == "zh-Hans" ? "请放入 目标武器" : "Target Weapon");
 
-            slotSource = new ModItemSlot(0.85f, "WeaponDamageInherit/Content/Infinite_Icons_Weapon", () => 
+            slotSource = new ModItemSlot(0.85f, "WeaponDamageInherit/Content/Infinite_Icons_Weapon", () =>
                 Language.ActiveCulture.Name == "zh-Hans" ? "请放入 面板武器" : "Stat Weapon");
 
-            slotResult = new ModItemSlot(0.85f, "WeaponDamageInherit/Content/Infinite_Icons_Weapon", () => 
+            slotResult = new ModItemSlot(0.85f, "WeaponDamageInherit/Content/Infinite_Icons_Weapon", () =>
                 Language.ActiveCulture.Name == "zh-Hans" ? "合成结果" : "Result Weapon");
             slotDestination.OnItemChange += (item, flag) =>
             {
@@ -836,16 +874,16 @@ namespace WeaponDamageInherit.Content
                     else Main.NewText("Damage type mismatch with stat weapon", Color.Red);
                     return false;
                 }
-                if ((WDIConfig.Instance.inheritCheck == WDIConfig.InheritCheckMode.EqualNoProj 
+                if ((WDIConfig.Instance.inheritCheck == WDIConfig.InheritCheckMode.EqualNoProj
                     || WDIConfig.Instance.inheritCheck == WDIConfig.InheritCheckMode.CompatibleNoProj)
                     && (slotSource.Item.shoot == ProjectileID.None ^ i2.shoot == ProjectileID.None) && (slotSource.Item.type != ItemID.None && i2.type != ItemID.None))
                 {
-                    string message = (slotSource.Item.shoot == ProjectileID.None) ? 
-                        (Language.ActiveCulture.Name == "zh-Hans" ? 
-                            "普通武器不能继承弹幕武器！" : 
+                    string message = (slotSource.Item.shoot == ProjectileID.None) ?
+                        (Language.ActiveCulture.Name == "zh-Hans" ?
+                            "普通武器不能继承弹幕武器！" :
                             "Projectile-launching weapons and non-projectile weapons are incompatible with each other!") :
-                        (Language.ActiveCulture.Name == "zh-Hans" ? 
-                            "弹幕武器不能继承普通武器！" : 
+                        (Language.ActiveCulture.Name == "zh-Hans" ?
+                            "弹幕武器不能继承普通武器！" :
                             "Projectile-launching weapons and non-projectile weapons are incompatible with each other!");
 
                     Main.NewText(message, Color.Red);
@@ -857,7 +895,7 @@ namespace WeaponDamageInherit.Content
                     else Main.NewText("Ammo not allowed!", Color.Red);
                     return false;
                 }
-                if (i2.consumable) 
+                if (i2.consumable)
                 {
                     if (Language.ActiveCulture.Name == "zh-Hans") Main.NewText("消耗品不要！！", Color.Red);
                     else Main.NewText("Consumables not allowed!", Color.Red);
@@ -880,16 +918,16 @@ namespace WeaponDamageInherit.Content
                     else Main.NewText("Damage type mismatch with stat weapon", Color.Red);
                     return false;
                 }
-                if ((WDIConfig.Instance.inheritCheck == WDIConfig.InheritCheckMode.EqualNoProj 
+                if ((WDIConfig.Instance.inheritCheck == WDIConfig.InheritCheckMode.EqualNoProj
                     || WDIConfig.Instance.inheritCheck == WDIConfig.InheritCheckMode.CompatibleNoProj)
                     && (slotDestination.Item.shoot == ProjectileID.None ^ i2.shoot == ProjectileID.None) && (slotDestination.Item.type != ItemID.None && i2.type != ItemID.None))
                 {
-                    string message = (slotDestination.Item.shoot == ProjectileID.None) ? 
-                        (Language.ActiveCulture.Name == "zh-Hans" ? 
-                            "普通武器不能继承弹幕武器！" : 
+                    string message = (slotDestination.Item.shoot == ProjectileID.None) ?
+                        (Language.ActiveCulture.Name == "zh-Hans" ?
+                            "普通武器不能继承弹幕武器！" :
                             "Projectile-launching weapons and non-projectile weapons are incompatible with each other!") :
-                        (Language.ActiveCulture.Name == "zh-Hans" ? 
-                            "弹幕武器不能继承普通武器！" : 
+                        (Language.ActiveCulture.Name == "zh-Hans" ?
+                            "弹幕武器不能继承普通武器！" :
                             "Projectile-launching weapons and non-projectile weapons are incompatible with each other!");
 
                     Main.NewText(message, Color.Red);
@@ -959,7 +997,7 @@ namespace WeaponDamageInherit.Content
                 mplr.itemD.TurnToAir();
                 SoundEngine.PlaySound(SoundID.Item176, Main.LocalPlayer.Center);
                 SoundEngine.PlaySound(SoundID.ResearchComplete, Main.LocalPlayer.Center);
-                if (Language.ActiveCulture.Name == "zh-Hans") 
+                if (Language.ActiveCulture.Name == "zh-Hans")
                 {
                     Main.NewText("拆解成功！", Color.LimeGreen);
                 }
@@ -973,7 +1011,7 @@ namespace WeaponDamageInherit.Content
             combineButton.Left.Set(-80, 1);
             combineButton.OnLeftClick += (evt, elem) =>
             {
-                var itemD = slotDestination.Item;   
+                var itemD = slotDestination.Item;
                 bool failed = false;
                 if (itemD == null || itemD.type == ItemID.None)
                 {
@@ -1076,7 +1114,7 @@ namespace WeaponDamageInherit.Content
                 itemD.TurnToAir();
                 SoundEngine.PlaySound(SoundID.Item176, Main.LocalPlayer.Center);
                 SoundEngine.PlaySound(SoundID.ResearchComplete, Main.LocalPlayer.Center);
-                if (Language.ActiveCulture.Name == "zh-Hans") 
+                if (Language.ActiveCulture.Name == "zh-Hans")
                 {
                     Main.NewText("继承成功！", Color.LimeGreen);
                 }
